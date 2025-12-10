@@ -15,6 +15,16 @@ inputs:
   branch:
     description: The EAS Update branch on which to publish.
     required: true
+  environment:
+    description: The environment to use for server-side defined EAS environment variables during command execution
+    required: false
+  platform:
+    description: The platform on which to publish. Possible values are 'all' | 'android' | 'ios'
+    required: false
+    default: all
+  auto-submit-builds:
+    description: Automatically submit new builds to their respective app stores using EAS Build `--auto-submit` flag (EAS Submit).
+    required: false
   github-token:
     description: GitHub token to use when commenting on PR
     required: false
@@ -30,8 +40,12 @@ outputs:
   ios-fingerprint:
     description: The iOS fingerprint of the current commit.
   android-build-id:
-    description: ID for Android EAS Build if one was started
+    description: ID for Android EAS Build with matching fingerprint.
+  android-did-start-new-build:
+    description: Whether this run of the action started a new Android EAS Build.
   ios-build-id:
-    description: ID for iOS EAS Build if one was started.
+    description: ID for iOS EAS Build with matching fingerprint.
+  ios-did-start-new-build:
+    description: Whether this run of the action started a new iOS EAS Build.
   update-output:
     description: The output (JSON) from the `eas update` command

@@ -1,8 +1,14 @@
-import { getBooleanInput, getInput, setOutput, group, setFailed, info } from '@actions/core';
+import { getBooleanInput, getInput, group, info, setFailed, setOutput } from '@actions/core';
 import { ExpoConfig } from '@expo/config';
 
 import { getQrTarget, getSchemesInOrderFromConfig } from '../comment';
-import { assertEasVersion, createUpdate, EasUpdate, getUpdateGroupQr, getUpdateGroupWebsite } from '../eas';
+import {
+  EasUpdate,
+  assertEasVersion,
+  createUpdate,
+  getUpdateGroupQr,
+  getUpdateGroupWebsite,
+} from '../eas';
 import { createIssueComment, hasPullContext, pullContext } from '../github';
 import { loadProjectConfig } from '../project';
 import { template } from '../utils';
@@ -38,14 +44,16 @@ export async function previewAction(input = previewInput()) {
   // Create the update before loading project information.
   // When the project needs to be set up, EAS project ID won't be available before this command.
   const command = sanitizeCommand(input.command);
-  const updates = await group(`Run eas ${command}"`, () => createUpdate(input.workingDirectory, command));
+  const updates = await group(`Run eas ${command}"`, () =>
+    createUpdate(input.workingDirectory, command)
+  );
 
   const update = updates.find(update => !!update);
   if (!update) {
     return setFailed(`No update found in command output.`);
   }
 
-  const config = await loadProjectConfig(input.workingDirectory);
+  const config = await loadProjectConfig(input.workingDirectory, null);
   if (!config.extra?.eas?.projectId) {
     return setFailed(`Missing 'extra.eas.projectId' in app.json or app.config.js.`);
   }
@@ -103,7 +111,11 @@ function sanitizeCommand(input: string): string {
 /**
  * Generate useful variables for the message body, and as step outputs.
  */
-export function getVariables(config: ExpoConfig, updates: EasUpdate[], options: ReturnType<typeof previewInput>) {
+export function getVariables(
+  config: ExpoConfig,
+  updates: EasUpdate[],
+  options: ReturnType<typeof previewInput>
+) {
   const projectId: string = config.extra?.eas?.projectId;
   const android = updates.find(update => update.platform === 'android');
   const ios = updates.find(update => update.platform === 'ios');
@@ -137,7 +149,9 @@ export function getVariables(config: ExpoConfig, updates: EasUpdate[], options: 
     androidManifestPermalink: android?.manifestPermalink || '',
     androidMessage: android?.message || '',
     androidRuntimeVersion: android?.runtimeVersion || '',
-    androidQR: android ? getUpdateGroupQr({ projectId, updateGroupId: android.group, appSlug, qrTarget }) : '',
+    androidQR: android
+      ? getUpdateGroupQr({ projectId, updateGroupId: android.group, appSlug, qrTarget })
+      : '',
     androidLink: android ? getUpdateGroupWebsite({ projectId, updateGroupId: android.group }) : '',
     // iOS update
     iosId: ios?.id || '',
@@ -172,7 +186,9 @@ function createSummaryHeader(updates: EasUpdate[], vars: ReturnType<typeof getVa
     .map(platform => `**${platform}**`)
     .join(', ');
 
-  const appSchemes = vars.projectScheme ? `- Scheme → **${JSON.parse(vars.projectSchemes).join('**, **')}**` : '';
+  const appSchemes = vars.projectScheme
+    ? `- Scheme → **${JSON.parse(vars.projectSchemes).join('**, **')}**`
+    : '';
 
   return `🚀 Expo preview is ready!
 

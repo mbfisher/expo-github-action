@@ -1,18 +1,18 @@
-import { getBooleanInput, getInput, setOutput, group, setFailed, info } from '@actions/core';
+import { getBooleanInput, getInput, group, info, setFailed, setOutput } from '@actions/core';
 import { context } from '@actions/github';
 import type { ExpoConfig } from '@expo/config';
-import type { Fingerprint, FingerprintSource } from '@expo/fingerprint';
+import type { Fingerprint, FingerprintDiffItem } from '@expo/fingerprint';
 import assert from 'assert';
 import { validate as isValidUUID } from 'uuid';
 
 import { deleteCacheAsync } from '../cacher';
 import { createDetails } from '../comment';
 import {
-  createEasBuildFromRawCommandAsync,
   BuildInfo,
-  getBuildLogsUrl,
   appPlatformEmojis,
   cancelEasBuildAsync,
+  createEasBuildFromRawCommandAsync,
+  getBuildLogsUrl,
   queryEasBuildInfoAsync,
 } from '../expo';
 import {
@@ -33,7 +33,7 @@ import {
   pullContext,
 } from '../github';
 import { loadProjectConfig } from '../project';
-import { template } from '../utils';
+import { retryAsync, template } from '../utils';
 import { executeAction } from '../worker';
 
 export const MESSAGE_ID = 'projectId:previewBuild:{projectId}';
@@ -51,7 +51,7 @@ export function collectPreviewBuildActionInput() {
 executeAction(previewAction);
 
 export async function previewAction(input = collectPreviewBuildActionInput()) {
-  const config = await loadProjectConfig(input.workingDirectory);
+  const config = await loadProjectConfig(input.workingDirectory, null);
   if (!config.extra?.eas?.projectId) {
     return setFailed(
       'Missing "extra.eas.projectId" in app.json or app.config.js. Please run `eas build:configure` first.'
@@ -63,7 +63,10 @@ export async function previewAction(input = collectPreviewBuildActionInput()) {
     return;
   }
 
-  const dbManager = await createFingerprintDbManagerAsync(input.packager, input.fingerprintDbCacheKey);
+  const dbManager = await createFingerprintDbManagerAsync(
+    input.packager,
+    input.fingerprintDbCacheKey
+  );
   const { currentFingerprint, diff } = await createFingerprintOutputAsync(dbManager, input);
   if (diff.length === 0) {
     info('Fingerprint is compatible, no new builds are required.');
@@ -78,7 +81,9 @@ export async function previewAction(input = collectPreviewBuildActionInput()) {
     await maybeCancelPreviousBuildsAsync(config, input);
     const variables = getVariables(config, []);
     const messageId = template(input.commentId, variables);
-    const latestEasEntity = await dbManager.getLatestEasEntityFromFingerprintAsync(currentFingerprint.hash);
+    const latestEasEntity = await dbManager.getLatestEasEntityFromFingerprintAsync(
+      currentFingerprint.hash
+    );
     const latestEasBuildInfo = latestEasEntity?.easBuildId
       ? await queryEasBuildInfoAsync(input.workingDirectory, latestEasEntity.easBuildId)
       : null;
@@ -175,7 +180,11 @@ async function maybeCreateCommentAsync(
   }
 }
 
-function setOutputs(variables: ReturnType<typeof getVariables>, messageId: string, messageBody: string) {
+function setOutputs(
+  variables: ReturnType<typeof getVariables>,
+  messageId: string,
+  messageBody: string
+) {
   for (const [name, value] of Object.entries(variables)) {
     setOutput(name, value);
   }
@@ -207,7 +216,7 @@ export function getVariables(config: ExpoConfig, builds: BuildInfo[]) {
 
 function createMessageBodyInBuilding(
   builds: BuildInfo[],
-  fingerprintDiff: FingerprintSource[],
+  fingerprintDiff: FingerprintDiffItem[],
   input: ReturnType<typeof collectPreviewBuildActionInput>
 ) {
   const tableRows: string[] = [];
@@ -328,12 +337,15 @@ async function maybeUpdateFingerprintDbAsync(params: {
   } catch (e) {
     info(`Failed to delete the cache: ${e}`);
   }
-  await saveDbToCacheAsync(params.fingerprintDbCacheKey);
+  await retryAsync(() => saveDbToCacheAsync(params.fingerprintDbCacheKey), 3);
 }
 
 //#region Non pull request context
 
-async function handleNonPullRequest(config: ExpoConfig, input: ReturnType<typeof collectPreviewBuildActionInput>) {
+async function handleNonPullRequest(
+  config: ExpoConfig,
+  input: ReturnType<typeof collectPreviewBuildActionInput>
+) {
   info('Non pull request context, skipping comment.');
   const targetBranch = input.savingDbBranch ?? getRepoDefaultBranch();
   assert(targetBranch);
@@ -342,14 +354,19 @@ async function handleNonPullRequest(config: ExpoConfig, input: ReturnType<typeof
   }
 
   info(`Updating fingerprint database for the ${targetBranch} branch push event.`);
-  const dbManager = await createFingerprintDbManagerAsync(input.packager, input.fingerprintDbCacheKey);
+  const dbManager = await createFingerprintDbManagerAsync(
+    input.packager,
+    input.fingerprintDbCacheKey
+  );
   const { currentFingerprint } = await createFingerprintOutputAsync(dbManager, input);
   const associatedPRs = await getPullRequestFromGitCommitShaAsync(
     { token: input.githubToken },
     input.currentGitCommitHash
   );
   const easBuildIds = (
-    await Promise.all(associatedPRs.map(pr => queryEasBuildIdsFromPrAsync(pr.prNumber, config, input)))
+    await Promise.all(
+      associatedPRs.map(pr => queryEasBuildIdsFromPrAsync(pr.prNumber, config, input))
+    )
   ).flat();
 
   let manyBuilds: { easBuildId?: string; fingerprint: Fingerprint }[];
@@ -361,7 +378,9 @@ async function handleNonPullRequest(config: ExpoConfig, input: ReturnType<typeof
     info(`Found EAS build IDs in associated PRs: ${easBuildIds.join(', ')}`);
   } else {
     manyBuilds = [{ fingerprint: currentFingerprint }];
-    info('No EAS build IDs found in associated PRs, creating a fingerprint entry without EAS build ID.');
+    info(
+      'No EAS build IDs found in associated PRs, creating a fingerprint entry without EAS build ID.'
+    );
   }
 
   await maybeUpdateFingerprintDbAsync({

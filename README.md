@@ -45,8 +45,6 @@ Here is a summary of all the input options you can use.
 
 | variable           | default | description                                                                                   |
 | ------------------ | ------- | --------------------------------------------------------------------------------------------- |
-| **expo-version**   | -       | Expo CLI version to install _(skips when omitted)_                                            |
-| **expo-cache**     | `true`  | If it should use the GitHub actions cache ([read more](#using-the-built-in-cache))            |
 | **eas-version**    | -       | EAS CLI version to install _(skips when omitted)_                                             |
 | **eas-cache**      | `true`  | If it should use the GitHub actions cache ([read more](#using-the-built-in-cache))            |
 | **packager**       | `yarn`  | Package manager to use _(e.g. `bun`, `yarn`, or `npm`)_                                               |
@@ -175,7 +173,7 @@ jobs:
         uses: expo/expo-github-action/preview@v8
         with:
           # `github.event.pull_request.head.ref` is only available on `pull_request` triggers.
-          # Use your own, or keep the automatically infered branch name from `--auto`, when using different triggers.
+          # Use your own, or keep the automatically inferred branch name from `--auto`, when using different triggers.
           command: eas update --auto --branch ${{ github.event.pull_request.head.ref }}
 ```
 

@@ -12,8 +12,6 @@ export async function loadProjectConfig(
   cwd: string,
   easEnvironment: string | null
 ): Promise<ExpoConfig> {
-  let stdout = '';
-
   const baseArguments = ['expo', 'config', '--json', '--type', 'public'];
 
   let commandLine: string;
@@ -27,13 +25,15 @@ export async function loadProjectConfig(
     args = baseArguments;
   }
 
-  try {
-    ({ stdout } = await getExecOutput(commandLine, args, {
-      cwd,
-      silent: !isDebug(),
-    }));
-  } catch (error: unknown) {
-    throw new Error(`Could not fetch the project info from ${cwd}`, { cause: error });
+  const { exitCode, stdout, stderr } = await getExecOutput(commandLine, args, {
+    cwd,
+    ignoreReturnCode: true,
+  });
+
+  if (exitCode > 0) {
+    console.log('stdout', stdout);
+    console.error('stderr', stderr);
+    throw new Error(`Could not fetch the project info from ${cwd}`);
   }
 
   return JSON.parse(stdout);

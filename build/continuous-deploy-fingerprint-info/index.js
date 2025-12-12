@@ -28330,7 +28330,6 @@ function getInput(name, options) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.loadProjectConfig = loadProjectConfig;
-const core_1 = __nccwpck_require__(7484);
 const exec_1 = __nccwpck_require__(5236);
 const io_1 = __nccwpck_require__(4994);
 /**
@@ -28339,7 +28338,6 @@ const io_1 = __nccwpck_require__(4994);
  * to use the app's own version of the config.
  */
 async function loadProjectConfig(cwd, easEnvironment) {
-    let stdout = '';
     const baseArguments = ['expo', 'config', '--json', '--type', 'public'];
     let commandLine;
     let args;
@@ -28352,14 +28350,14 @@ async function loadProjectConfig(cwd, easEnvironment) {
         commandLine = 'npx';
         args = baseArguments;
     }
-    try {
-        ({ stdout } = await (0, exec_1.getExecOutput)(commandLine, args, {
-            cwd,
-            silent: !(0, core_1.isDebug)(),
-        }));
-    }
-    catch (error) {
-        throw new Error(`Could not fetch the project info from ${cwd}`, { cause: error });
+    const { exitCode, stdout, stderr } = await (0, exec_1.getExecOutput)(commandLine, args, {
+        cwd,
+        ignoreReturnCode: true,
+    });
+    if (exitCode > 0) {
+        console.log('stdout', stdout);
+        console.error('stderr', stderr);
+        throw new Error(`Could not fetch the project info from ${cwd}`);
     }
     return JSON.parse(stdout);
 }
